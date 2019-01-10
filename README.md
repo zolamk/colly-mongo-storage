@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	// Instantiate collector
+    
 	c := colly.NewCollector()
 
 	storage := &mongo.Storage{
