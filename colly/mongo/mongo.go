@@ -11,6 +11,7 @@ import (
 	"github.com/mongodb/mongo-go-driver/x/bsonx"
 )
 
+// Storage implements a MongoDB storage backend for colly
 type Storage struct {
 	Database string
 	URI      string
@@ -20,6 +21,7 @@ type Storage struct {
 	cookies  *mongo.Collection
 }
 
+// Init initializes the MongoDB storage
 func (s *Storage) Init() error {
 
 	var err error
@@ -45,6 +47,7 @@ func (s *Storage) Init() error {
 
 }
 
+// Visited implements colly/storage.Visited()
 func (s *Storage) Visited(requestID uint64) error {
 
 	_, err := s.visited.InsertOne(context.Background(), bsonx.MDoc{
@@ -56,6 +59,7 @@ func (s *Storage) Visited(requestID uint64) error {
 
 }
 
+// IsVisited implements colly/storage.IsVisited()
 func (s *Storage) IsVisited(requestID uint64) (bool, error) {
 
 	result := bsonx.MDoc{}
@@ -81,6 +85,7 @@ func (s *Storage) IsVisited(requestID uint64) (bool, error) {
 
 }
 
+// Cookies implements colly/storage.Cookies()
 func (s *Storage) Cookies(u *url.URL) string {
 
 	result := bsonx.MDoc{}
@@ -103,6 +108,7 @@ func (s *Storage) Cookies(u *url.URL) string {
 
 }
 
+// SetCookies implements colly/storage.SetCookies()
 func (s *Storage) SetCookies(u *url.URL, cookies string) {
 
 	if _, err := s.cookies.InsertOne(nil, bsonx.MDoc{
