@@ -2,13 +2,14 @@ package mongo
 
 import (
 	"context"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"net/url"
 	"strconv"
 
-	"github.com/mongodb/mongo-go-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/mongodb/mongo-go-driver/x/bsonx"
+	"go.mongodb.org/mongo-driver/x/bsonx"
 )
 
 // Storage implements a MongoDB storage backend for colly
@@ -26,7 +27,7 @@ func (s *Storage) Init() error {
 
 	var err error
 
-	if s.client, err = mongo.NewClient(s.URI); err != nil {
+	if s.client, err = mongo.NewClient(options.Client().ApplyURI(s.URI)); err != nil {
 
 		return err
 
