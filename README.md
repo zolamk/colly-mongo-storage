@@ -7,15 +7,14 @@ Example Usage:
 package main
 
 import (
-	"log"
+	"fmt"
 
 	"github.com/gocolly/colly"
-	"github.com/gocolly/colly/extensions"
 	"github.com/zolamk/colly-mongo-storage/colly/mongo"
 )
 
 func main() {
-    
+
 	c := colly.NewCollector()
 
 	storage := &mongo.Storage{
@@ -24,24 +23,19 @@ func main() {
 	}
 
 	if err := c.SetStorage(storage); err != nil {
-        panic(err)
-    }
+		panic(err)
+	}
 
+	// Find and visit all links
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
-		q.AddURL(e.Request.AbsoluteURL(e.Attr("href")))
+		e.Request.Visit(e.Attr("href"))
 	})
 
-	c.OnResponse(func(r *colly.Response) {
-		log.Println(r.Request.URL, "\t", r.StatusCode)
+	c.OnRequest(func(r *colly.Request) {
+		fmt.Println("Visiting", r.URL)
 	})
 
-	c.OnError(func(r *colly.Response, err error) {
-		log.Println(r.Request.URL, "\t", r.StatusCode, "\nError:", err)
-    })
-    
-    c.Visit("https://www.example.com")
-    
+	c.Visit("http://go-colly.org/")
 }
-
 
 ```
