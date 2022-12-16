@@ -1,0 +1,193 @@
+# This file is used to configure Reviewpad.
+# The configuration is a proposal to help you get started.
+# You can use it as a starting point and customize it to your needs.
+# For more details see https://docs.reviewpad.com/guides/syntax.
+
+# Define the version of Reviewpad to be used.
+api-version: reviewpad.com/v3.x
+
+# Define the list of labels to be used by Reviewpad.
+# For more details see https://docs.reviewpad.com/guides/syntax#label.
+labels:
+  small:
+    description: Pull request is small
+    color: "#76dbbe"
+  medium:
+    description: Pull request is medium
+    color: "#2986cc"
+  large:
+    description: Pull request is large
+    color: "#c90076"
+
+# Define the list of groups to be used by Reviewpad.
+# A group specifies a list GitHub users or an expression that can be translated into a list of GitHub users.
+# For more details see https://docs.reviewpad.com/guides/syntax#group.
+groups:
+  # This group translates into the list of GitHub users that have created more than 10 pull requests.
+  - name: knowledgeable-developers
+    description: Group of developers that have created more than 10 pull requests
+    kind: developers
+    type: filter
+    param: dev
+    # $pullRequestCountBy() retrieves the total number of pull requests created by the given GitHub user.
+    # $dev is a variable that represents the current GitHub user when iterating over the list of GitHub users.
+    where: $pullRequestCountBy($dev) > 10
+
+# Define the list of rules to be used by Reviewpad.
+# A rule is a boolean expression that can be used to define conditions for the execution of workflows.
+# For more details see https://docs.reviewpad.com/guides/syntax#rule.
+rules:
+  - name: is-ready-for-review
+    description: Pull request is ready to be reviewed
+    spec: $isDraft() == false
+
+# Define the list of workflows to be run by Reviewpad.
+# A workflow is a list of actions that will be executed based on the defined rules.
+# For more details see https://docs.reviewpad.com/guides/syntax#workflow.
+workflows:
+  # This workflow labels a pull request based on the total number of lines changed.
+  # This helps to prioritize pull requests based on their size.
+  - name: size-labeling
+    description: Label pull request based on the number of lines changed
+    # Run this workflow regardless of other workflows' execution.
+    # For more details see https://docs.reviewpad.com/guides/workflows/#always-run
+    always-run: true
+    if:
+      # $size() retrieves the total number of changed lines in the pull request.
+      # For more details see https://docs.reviewpad.com/guides/syntax#workflow.
+      - rule: $size() < 100
+        # List of actions to execute if the rule "$size() < 100" is true.
+        extra-actions:
+          - $removeLabels(["medium", "large"])
+          - $addLabel("small")
+      - rule: $size() >= 100 && $size() < 300
+        extra-actions:
+          - $removeLabels(["small", "large"])
+          - $addLabel("medium")
+      - rule: $size() >= 300
+        extra-actions:
+          - $removeLabels(["small", "medium"])
+          - $addLabel("large")
+
+  # This workflow validates that a pull request follows the conventional commits specification.
+  # This helps to generate a proper changelog.
+  # For more details about about conventional see https://www.conventionalcommits.org/en/v1.0.0/.
+  - name: conventional-commits-validation
+    description: Validate that the pull request follows the conventional commits
+    always-run: true
+    if:
+      - rule: is-ready-for-review
+    then:
+      # $commitLint() checks if the commits in the pull request follow the conventional commits specification.
+      # For more details see https://docs.reviewpad.com/guides/built-ins/#commitlint
+      - $commitLint()
+      # $titleLint() checks if the title of the pull request follows the conventional commits specification.
+      # For more details see https://docs.reviewpad.com/guides/built-ins/#titlelint
+      - $titleLint()
+
+  # This workflow validates that a pull request has the required context to be reviewed.
+  # This helps to avoid reviewing pull requests that are not ready to be reviewed.
+  - name: context-validation
+    description: Validate that the pull request has the required context to be reviewed
+    always-run: true
+    if:
+      - rule: $description() == ""
+        extra-actions:
+          # $fail() stops the execution and fails the Reviewpad check.
+          # For more details see https://docs.reviewpad.com/guides/built-ins/#fail.
+          - $fail("Please provide a description for the pull request")
+      - rule: $title() == ""
+        extra-actions:
+          - $fail("Please provide a title for the pull request")
+      - rule: $hasLinkedIssues() == false
+        extra-actions:
+          # $warn() creates a warning but does not fail the Reviewpad check.
+          # For more details see https://docs.reviewpad.com/guides/built-ins/#warn.
+          - $warn("Please link an issue to the pull request")
+
+  # This workflow makes sure that a pull request that changes critical code is reviewer properly.
+  # This helps to avoid critical bugs and security issues.
+  - name: critical-code-change
+    description: Make sure that critical code changes are reviewed carefully
+    always-run: true
+    if:
+      # $hasAnnotation() checks if any of the changed code is annotated with the specified annotation.
+      # For more details see https://docs.reviewpad.com/guides/built-ins#hasannotation.
+      # - rule: $hasAnnotation("critical")
+      - rule: "true"
+    then:
+      - $addLabel("critical")
+      # $assignReviewer() assigns a reviewer to the pull request.
+      # For more details see https://docs.reviewpad.com/guides/built-ins/#assignreviewer.
+      - $assignReviewer($group("knowledgeable-developers"), 1, "reviewpad")
+      - $warn("This pull request changes critical code. Please make sure to review it properly!")
+
+  # This workflow congratulates a pull request contributor on their contributions.
+  # This helps contributors to feel welcome and continue to contribute.
+  - name: congratulate-pull-request-contributor
+    description: Congratulate pull request contributor based on their total number of contributions
+    always-run: true
+    if:
+      - rule: $pullRequestCountBy($author()) == 1
+        extra-actions:
+          # $commentOnce() adds a comment to the pull request once.
+          # For more details see https://docs.reviewpad.com/guides/built-ins/#commentonce
+          - $commentOnce($sprintf("Thank you @%s for this first contribution!", [$author()]))
+      - rule: $pullRequestCountBy($author()) == 100
+        extra-actions:
+          - $commentOnce($sprintf("Way to go 🎉 This is your 100th pull request!", [$author()]))
+
+  # This workflow congratulates an issue contributor on their contributions.
+  # This helps contributors to feel welcome and engage with the community.
+  - name: congratulate-issue-contributor
+    description: Congratulate issue contributor based on their total number of contributions
+    always-run: true
+    # "on" field is a list of GitHub entity types that should trigger the workflow.
+    # Here we want the workflow to be triggered on issues.
+    # For more details see https://docs.reviewpad.com/guides/syntax#workflow.
+    on:
+      - issue
+    if:
+      - rule: $issueCountBy($author()) == 1
+        extra-actions:
+          # $commentOnce() adds a comment to the pull request once.
+          # For more details see https://docs.reviewpad.com/guides/built-ins/#commentonce
+          - $commentOnce($sprintf("Thank you @%s for this first contribution!", [$author()]))
+      - rule: $issueCountBy($author()) == 100
+        extra-actions:
+          - $commentOnce($sprintf("Way to go 🎉 This is your 100th issue!", [$author()]))
+
+  # This workflow assigns a label to a pull request based on the pull request mode.
+  # It applies the idea of Ship/Show/Ask by Martin Fowler.
+  # For more details see https://martinfowler.com/articles/ship-show-ask.html
+  - name: ship-show-ask-labelling
+    always-run: true
+    if:
+      # Look for the text "(ship)" in the pull request title.
+      # Here's an example of a title following the conventional commits specification:
+      # feat(ship): update readme
+      - rule: $contains($title(), "(ship)")
+        extra-actions:
+          - $removeLabels(["ask", "show"])
+          - $addLabel("ship")
+      - rule: $contains($title(), "(show)")
+        extra-actions:
+          - $removeLabels(["ask", "ship"])
+          - $addLabel("show")
+      - rule: $contains($title(), "(ask)")
+        extra-actions:
+          - $removeLabels(["show", "ship"])
+          - $addLabel("ask")
+
+  # This workflow automatically merges pull requests that only contain documentation changes.
+  # This helps to accelerate the documentation process and bottlenecks on documentation reviews.
+  - name: merge-documentation-only
+    description: Automatically merge documentation pull requests
+    always-run: true
+    if:
+      # $hasFileExtensions() verifies whether all changed files have the specified extensions.
+      # For more details see https://docs.reviewpad.com/guides/built-ins/#hasfileextensions-
+      - rule: $hasFileExtensions([".md"])
+    then:
+      - $merge()
+      - $commentOnce("This pull request has been automatically merged because it is a documentation pull request.")
