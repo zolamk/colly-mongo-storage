@@ -116,14 +116,3 @@ workflows:
         extra-actions:
           - $addLabel("dependencies")
 
-
-  # This workflow validates that pull requests do not contain changes to the license.
-  # This helps avoid unwanted license modifications.
-  - name: license-validation
-    description: Validate that licenses are not modified
-    always-run: true
-    if:
-      # Fail Reviewpad check on pull requests that modify any LICENSE;
-      - rule: $hasFilePattern("**/LICENSE*")
-        extra-actions:
-          - $fail("License files cannot be modified")
