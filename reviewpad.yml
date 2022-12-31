@@ -1,0 +1,11 @@
+# This file is used to configure Reviewpad.
+# The configuration is a proposal to help you get started.
+# You can use it as a starting point and customize it to your needs.
+# For more details see https://docs.reviewpad.com/guides/syntax.
+
+# Define the version of Reviewpad to be used.
+api-version: reviewpad.com/v3.x
+# Define the list of workflows to be run by Reviewpad.
+# A workflow is a list of actions that will be executed based on the defined rules.
+# For more details see https://docs.reviewpad.com/guides/syntax#workflow.
+workflows:
