@@ -2,14 +2,14 @@ package mongo
 
 import (
 	"context"
+	"errors"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"net/url"
 	"strconv"
 
 	"go.mongodb.org/mongo-driver/mongo"
-
-	"go.mongodb.org/mongo-driver/x/bsonx"
 )
 
 // Storage implements a MongoDB storage backend for colly
@@ -27,16 +27,12 @@ func (s *Storage) Init() error {
 
 	var err error
 
-	if s.client, err = mongo.NewClient(options.Client().ApplyURI(s.URI)); err != nil {
-
+	clientOptions := options.Client().ApplyURI(s.URI)
+	client, err := mongo.Connect(context.Background(), clientOptions)
+	if err != nil {
 		return err
-
 	}
-	if err = s.client.Connect(context.Background()); err != nil {
-
-		return err
-
-	}
+	s.client = client
 
 	s.db = s.client.Database(s.Database)
 
@@ -48,13 +44,20 @@ func (s *Storage) Init() error {
 
 }
 
-// Visited implements colly/storage.Visited()
+// VisitedDocument represents the document we want to insert into MongoDB when we have visited a page.
+type VisitedDocument struct {
+	RequestID string `json:"requestID"`
+	Visited   bool   `json:"visited"`
+}
+
+// Visited implements colly/storage.VisitedDocument()
 func (s *Storage) Visited(requestID uint64) error {
 
-	_, err := s.visited.InsertOne(context.Background(), bsonx.MDoc{
-		"requestID": bsonx.String(strconv.FormatUint(requestID, 10)),
-		"visited":   bsonx.Boolean(true),
-	})
+	visited := VisitedDocument{
+		RequestID: strconv.FormatUint(requestID, 10),
+		Visited:   true,
+	}
+	_, err := s.visited.InsertOne(context.Background(), visited)
 
 	return err
 
@@ -62,15 +65,13 @@ func (s *Storage) Visited(requestID uint64) error {
 
 // IsVisited implements colly/storage.IsVisited()
 func (s *Storage) IsVisited(requestID uint64) (bool, error) {
+	result := &VisitedDocument{}
+	visitedQuery := bson.D{{"requestID", strconv.FormatUint(requestID, 10)}}
 
-	result := bsonx.MDoc{}
-
-	err := s.visited.FindOne(nil, bsonx.MDoc{
-		"requestID": bsonx.String(strconv.FormatUint(requestID, 10)),
-	}).Decode(&result)
+	err := s.visited.FindOne(nil, visitedQuery).Decode(&result)
 	if err != nil {
 
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 
 			return false, nil
 
@@ -86,39 +87,38 @@ func (s *Storage) IsVisited(requestID uint64) (bool, error) {
 
 }
 
+type CookiesDocument struct {
+	Host    string `json:"host"`
+	Cookies string `json:"cookies"`
+}
+
 // Cookies implements colly/storage.Cookies()
 func (s *Storage) Cookies(u *url.URL) string {
 
-	result := bsonx.MDoc{}
+	cookiesQuery := bson.D{{"host", u.Host}}
+	result := &CookiesDocument{}
 
-	if err := s.cookies.FindOne(nil, bsonx.MDoc{
-		"host": bsonx.String(u.Host),
-	}).Decode(&result); err != nil {
+	if err := s.cookies.FindOne(nil, cookiesQuery).Decode(&result); err != nil {
 
-		if err != mongo.ErrNoDocuments {
-
+		if !errors.Is(err, mongo.ErrNoDocuments) {
 			log.Println(err)
-
 		}
 
 		return ""
-
 	}
 
-	return result["cookies"].String()
-
+	return result.Cookies
 }
 
 // SetCookies implements colly/storage.SetCookies()
 func (s *Storage) SetCookies(u *url.URL, cookies string) {
+	d := CookiesDocument{
+		Host:    u.Host,
+		Cookies: cookies,
+	}
 
-	if _, err := s.cookies.InsertOne(nil, bsonx.MDoc{
-		"host":    bsonx.String(u.Host),
-		"cookies": bsonx.String(cookies),
-	}); err != nil {
-
+	if _, err := s.cookies.InsertOne(nil, d); err != nil {
 		log.Println(err)
-
 	}
 
 }
